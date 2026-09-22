@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>himawari24 · Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{background:#08090C;font-family:Inter,system-ui,sans-serif}
+    .card{background:#10131A;border:1px solid rgba(255,255,255,.08)}
+    .mono{font-family:ui-monospace,'JetBrains Mono',monospace}
+  </style>
+</head>
+<body class="min-h-screen text-slate-100">
+  <header class="sticky top-0 z-10 border-b border-white/10 bg-black/40 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="h-8 w-8 rounded-lg bg-[#E50914] flex items-center justify-center text-white font-black">▶</div>
+        <span class="font-extrabold tracking-tight">himawari<span class="text-[#E50914]">24</span></span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="hidden sm:inline text-xs px-2.5 py-1 rounded-full border {{ 'bg-sky-500/10 text-sky-400 border-sky-500/25' if ms_configured else 'bg-amber-500/10 text-amber-400 border-amber-500/25' }}">
+          {{ 'Microsoft OAuth ready' if ms_configured else 'Microsoft not configured' }}
+        </span>
+        <a href="{{ url_for('logout') }}" class="text-sm text-slate-400 hover:text-white">Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-8">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="text-sm rounded-lg px-4 py-3 {{ 'bg-rose-500/10 text-rose-300 border border-rose-500/20' if cat=='error' else 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    {% if not ms_configured %}
+      <div class="card rounded-xl p-4 border-amber-500/30 bg-amber-500/5 text-sm text-amber-200/90">
+        <b>Microsoft OAuth not configured.</b> Add <code class="mono">MS_CLIENT_ID</code> and <code class="mono">MS_CLIENT_SECRET</code> to <code class="mono">.env</code>, then restart.
+        Register this redirect URI in your Azure app: <code class="mono break-all">{{ redirect_uri }}</code>
+      </div>
+    {% endif %}
+
+    <!-- Add assignments (bulk paste) -->
+    <section class="card rounded-2xl p-6">
+      <h2 class="text-lg font-bold mb-1">Add mailboxes</h2>
+      <p class="text-sm text-slate-400 mb-4">Paste one email per line (you can paste <span class="mono">email:password</span> — the password is ignored, personal Outlook needs OAuth). Max 50 recommended.</p>
+      <form method="post" action="{{ url_for('assignments_add') }}" class="space-y-3">
+        <textarea name="emails" rows="4" placeholder="user1@outlook.com&#10;user2@hotmail.com&#10;user3@outlook.com:whatever" class="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-slate-100 mono text-sm outline-none focus:border-[#E50914]"></textarea>
+        <div class="flex flex-wrap items-center gap-3">
+          <select name="provider" class="h-10 rounded-lg bg-black/40 border border-white/10 px-3 text-sm">
+            <option value="outlook_graph">Outlook (Graph)</option>
+          </select>
+          <input name="label" placeholder="Label (optional)" class="h-10 rounded-lg bg-black/40 border border-white/10 px-3 text-sm">
+          <button class="h-10 px-5 rounded-lg bg-[#E50914] hover:bg-[#c40810] font-semibold text-sm">Add</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Mailboxes list -->
+    <section>
+      <h2 class="text-lg font-bold mb-4">Mailboxes <span class="text-slate-500 text-sm font-normal">({{ rows|length }})</span></h2>
+      {% if rows|length == 0 %}
+        <div class="card rounded-2xl p-10 text-center text-slate-500">No mailboxes yet — add some above.</div>
+      {% else %}
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for r in rows %}
+        <div class="card rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <div class="font-medium truncate">{{ r.email_norm }}</div>
+              {% if r.mailbox_email %}<div class="text-xs text-slate-500 truncate">Inbox: {{ r.mailbox_email }}</div>{% endif %}
+              {% if r.label %}<div class="text-xs text-slate-600">{{ r.label }}</div>{% endif %}
+            </div>
+            {% if r.status == 'connected' %}
+              <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Connected</span>
+            {% elif r.status == 'needs_reconnect' %}
+              <span class="text-xs px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30">Needs Reconnect</span>
+            {% else %}
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/30">Not connected</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-2 mt-4">
+            {% if r.status == 'connected' %}
+              <a href="{{ url_for('mailboxes_connect', email=r.email_norm) }}" class="flex-1 text-center h-9 leading-9 rounded-lg text-sm bg-white/5 border border-white/10 hover:bg-white/10">Re-consent</a>
+              <form method="post" action="{{ url_for('mailboxes_disconnect') }}"><input type="hidden" name="email" value="{{ r.email_norm }}"><button class="h-9 px-3 rounded-lg text-sm bg-rose-500/10 text-rose-300 border border-rose-500/30 hover:bg-rose-500/20">Disconnect</button></form>
+            {% else %}
+              <a href="{{ url_for('mailboxes_connect', email=r.email_norm) }}" class="flex-1 text-center h-9 leading-9 rounded-lg text-sm font-semibold {{ 'bg-rose-600 hover:bg-rose-700' if r.status=='needs_reconnect' else 'bg-[#0078D4] hover:bg-[#106ebe]' }} text-white">{{ 'Reconnect Outlook' if r.status=='needs_reconnect' else 'Connect Outlook' }}</a>
+            {% endif %}
+            <form method="post" action="{{ url_for('assignments_delete') }}"><input type="hidden" name="email" value="{{ r.email_norm }}"><button class="h-9 px-3 rounded-lg text-sm text-slate-500 hover:text-rose-400 hover:bg-rose-500/10">✕</button></form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- Code search -->
+    <section class="card rounded-2xl p-6">
+      <h2 class="text-lg font-bold mb-4">Fetch Netflix code</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <select id="s-email" class="h-10 rounded-lg bg-black/40 border border-white/10 px-3 text-sm">
+          <option value="">Select email…</option>
+          {% for r in rows %}<option value="{{ r.email_norm }}">{{ r.email_norm }}</option>{% endfor %}
+        </select>
+        <select id="s-cat" class="h-10 rounded-lg bg-black/40 border border-white/10 px-3 text-sm">
+          <option value="">Select category…</option>
+          {% for key, c in categories.items() %}<option value="{{ key }}">{{ c.label }}</option>{% endfor %}
+        </select>
+        <button onclick="runSearch()" id="s-btn" class="h-10 rounded-lg bg-[#E50914] hover:bg-[#c40810] font-semibold text-sm">Fetch code</button>
+      </div>
+      <div id="result" class="mt-5"></div>
+    </section>
+  </main>
+
+  <script>
+    async function runSearch(){
+      const email = document.getElementById('s-email').value;
+      const category = document.getElementById('s-cat').value;
+      const out = document.getElementById('result');
+      if(!email || !category){ out.innerHTML = '<div class="text-amber-400 text-sm">Pick an email and a category.</div>'; return; }
+      const btn = document.getElementById('s-btn'); btn.textContent='Fetching…'; btn.disabled=true;
+      try{
+        const fd = new FormData(); fd.append('email', email); fd.append('category', category);
+        const res = await fetch('/search', {method:'POST', body:fd});
+        const d = await res.json();
+        if(d.found){
+          out.innerHTML = `
+            <div class="card rounded-xl p-6 border border-emerald-500/20">
+              ${d.code ? `<div class="text-xs text-slate-500 uppercase mb-2">Extracted code</div>
+              <div class="flex items-center gap-3"><div class="mono text-3xl tracking-widest font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-6 py-3">${d.code}</div>
+              <button onclick="navigator.clipboard.writeText('${d.code}');this.textContent='Copied'" class="h-11 px-4 rounded-lg bg-white/5 border border-white/10 text-sm">Copy</button></div>` : ''}
+              ${d.link ? `<div class="mt-4"><div class="text-xs text-slate-500 uppercase mb-2">Action link</div><a href="${d.link}" target="_blank" class="text-sky-400 text-sm break-all underline">${d.link}</a></div>` : ''}
+              <div class="mt-4 pt-4 border-t border-white/10 text-sm grid sm:grid-cols-2 gap-3">
+                <div><div class="text-xs text-slate-500">Subject</div>${d.subject||'—'}</div>
+                <div><div class="text-xs text-slate-500">From</div>${d.from||'—'}</div>
+                <div class="sm:col-span-2"><div class="text-xs text-slate-500">Received</div><span class="mono text-xs">${d.received||'—'}</span></div>
+              </div>
+            </div>`;
+        } else {
+          const reasons = {not_connected:'Mailbox not connected — connect it above first.',needs_reconnect:'Token revoked/expired — reconnect the mailbox.',empty:'No matching Netflix email found for this category.',not_configured:'Provider not configured.',throttled:'Microsoft throttled (429) — retry shortly.',no_assignment:'No assignment for this email.'};
+          out.innerHTML = `<div class="card rounded-xl p-6 text-center text-slate-400">${reasons[d.reason]||('Error: '+(d.reason||'unknown'))}</div>`;
+        }
+      }catch(e){ out.innerHTML = '<div class="text-rose-400 text-sm">Request failed.</div>'; }
+      finally{ btn.textContent='Fetch code'; btn.disabled=false; }
+    }
+  </script>
+</body>
+</html>

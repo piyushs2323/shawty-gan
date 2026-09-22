@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>himawari24 · Sign in</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{background:#08090C;font-family:Inter,system-ui,sans-serif}
+    .card{background:#10131A;border:1px solid rgba(255,255,255,.08)}
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center px-4 text-slate-100">
+  <div class="w-full max-w-md">
+    <div class="flex items-center gap-3 mb-8">
+      <div class="h-11 w-11 rounded-xl bg-[#E50914] flex items-center justify-center text-white text-xl font-black">▶</div>
+      <div>
+        <h1 class="text-2xl font-extrabold tracking-tight">himawari<span class="text-[#E50914]">24</span></h1>
+        <p class="text-xs text-slate-500">Netflix Email Access · Admin</p>
+      </div>
+    </div>
+    <div class="card rounded-2xl p-8">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="mb-4 text-sm rounded-lg px-3 py-2 {{ 'bg-rose-500/10 text-rose-300' if cat=='error' else 'bg-emerald-500/10 text-emerald-300' }}">{{ msg }}</div>
+        {% endfor %}
+      {% endwith %}
+      <form method="post" class="space-y-5">
+        <div>
+          <label class="text-xs text-slate-400 uppercase tracking-wide">Username</label>
+          <input name="username" value="admin" class="mt-1.5 w-full h-11 rounded-lg bg-black/40 border border-white/10 px-3 text-slate-100 outline-none focus:border-[#E50914]">
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 uppercase tracking-wide">Password</label>
+          <input name="password" type="password" placeholder="••••••••" class="mt-1.5 w-full h-11 rounded-lg bg-black/40 border border-white/10 px-3 text-slate-100 outline-none focus:border-[#E50914]">
+        </div>
+        <button class="w-full h-11 rounded-lg bg-[#E50914] hover:bg-[#c40810] font-semibold text-white">Sign in</button>
+      </form>
+    </div>
+    <p class="text-center text-xs text-slate-600 mt-6">Read-only mailbox access · Encrypted tokens at rest</p>
+  </div>
+</body>
+</html>
