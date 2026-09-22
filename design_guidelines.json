@@ -1,0 +1,114 @@
+{
+  "project_name": "himawari24 - Direct Outlook (Personal) Mailbox Access & Netflix Code Fetcher",
+  "archetype": "TACTICAL_DARK_DASHBOARD",
+  "theme": {
+    "mode": "dark",
+    "primary_background": "#08090C",
+    "card_background": "#10131A",
+    "glass_overlay": "rgba(16, 19, 26, 0.75)",
+    "border_subtle": "rgba(255, 255, 255, 0.08)",
+    "border_active": "rgba(229, 9, 20, 0.4)",
+    "accent_netflix_crimson": "#E50914",
+    "accent_microsoft_azure": "#0078D4",
+    "accent_gmail_amber": "#F4B400",
+    "status_connected": "#10B981",
+    "status_needs_reconnect": "#EF4444",
+    "text_primary": "#F3F4F6",
+    "text_secondary": "#9CA3AF",
+    "text_muted": "#6B7280"
+  },
+  "typography": {
+    "font_family_display": "'Cabinet Grotesk', 'Outfit', sans-serif",
+    "font_family_body": "'Inter', -apple-system, sans-serif",
+    "font_family_mono": "'JetBrains Mono', 'Fira Code', monospace",
+    "hierarchy": {
+      "h1": "text-3xl sm:text-4xl font-extrabold tracking-tight text-white",
+      "h2": "text-xl sm:text-2xl font-bold tracking-tight text-slate-100",
+      "h3": "text-lg font-semibold text-slate-200",
+      "subtitle": "text-sm text-slate-400 font-normal leading-relaxed",
+      "mono_code": "font-mono text-xl sm:text-2xl tracking-widest font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 rounded-lg px-4 py-3"
+    }
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "p-4 md:p-6 lg:p-8",
+    "grid_bento": "grid grid-cols-1 md:grid-cols-12 gap-6",
+    "card_padding": "p-6 sm:p-8",
+    "container_max_width": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "navbar_height": "h-16"
+  },
+  "visual_enhancers": {
+    "glassmorphism": "backdrop-blur-xl bg-slate-900/80 border border-white/10 shadow-2xl",
+    "card_style": "bg-[#10131A] border border-white/10 rounded-2xl shadow-xl transition-all duration-200 hover:border-slate-700",
+    "active_card_glow": "shadow-[0_0_25px_rgba(229,9,20,0.15)] border-red-600/40",
+    "badge_connected": "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
+    "badge_reconnect": "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 animate-pulse",
+    "badge_provider_outlook": "inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20",
+    "badge_provider_gmail": "inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20"
+  },
+  "key_components": [
+    {
+      "name": "NavigationHeader",
+      "description": "Sticky dark glassmorphism navbar with himawari24 branding, quick stats, active provider badges, and Admin authentication status.",
+      "data_test_id": "nav-header"
+    },
+    {
+      "name": "MailboxList",
+      "description": "Grid / Table of connected Microsoft Outlook / Hotmail mailboxes showing OAuth token status, email, scopes, last synced time, and Connect/Disconnect triggers.",
+      "data_test_id": "mailbox-list"
+    },
+    {
+      "name": "ConnectOutlookOAuthModal",
+      "description": "Interactive dialog / OAuth trigger card with step-by-step guidance for authenticating personal Microsoft/Outlook accounts via Microsoft Graph API.",
+      "data_test_id": "connect-outlook-modal"
+    },
+    {
+      "name": "EmailAssignmentsTable",
+      "description": "Management panel mapping target Netflix recipient email addresses to their provider (gmail_imap vs outlook_graph). Allows inline switching and quick testing.",
+      "data_test_id": "email-assignments-table"
+    },
+    {
+      "name": "CategoryCodeSearch",
+      "description": "High-priority search panel allowing selection of Netflix email address + category filter (Login Code, Verification Code, Household, Password Reset, TV Login). Displays instantaneous parsed results.",
+      "data_test_id": "category-code-search"
+    },
+    {
+      "name": "ParsedResultCard",
+      "description": "Hero display card showing the extracted code/link with click-to-copy, expiration counter, raw snippet preview, and provider provenance metadata.",
+      "data_test_id": "parsed-result-card"
+    }
+  ],
+  "image_urls": {
+    "hero_netflix": "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwxfHxuZXRmbGl4JTIwc3RyZWFtJTIwdXNlciUyMGFjY291bnQlMjBzZWN1cml0eXxlbnwwfHx8fDE3ODY2NDE1MzV8MA&ixlib=rb-4.1.0&q=85",
+    "tv_screen": "https://images.unsplash.com/photo-1643208589889-0735ad7218f0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHszfHxuZXRmbGl4JTIwc3RyZWFtJTIwdXNlciUyMGFjY291bnQlMjBzZWN1cml0eXxlbnwwfHx8fDE3ODY2NDE1MzV8MA&ixlib=rb-4.1.0&q=85",
+    "icon_netflix": "https://images.unsplash.com/photo-1637363990764-de84fd247b7d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwyfHxuZXRmbGl4JTIwc3RyZWFtJTIwdXNlciUyMGFjY291bnQlMjBzZWN1cml0eXxlbnwwfHx8fDE3ODY2NDE1MzV8MA&ixlib=rb-4.1.0&q=85"
+  },
+  "testing_and_data_ids": {
+    "required_test_ids": [
+      "nav-header",
+      "nav-mailboxes-tab",
+      "nav-assignments-tab",
+      "nav-code-search-tab",
+      "admin-login-button",
+      "admin-logout-button",
+      "connect-outlook-button",
+      "disconnect-mailbox-button",
+      "mailbox-card-status-connected",
+      "mailbox-card-status-reconnect",
+      "reconnect-outlook-button",
+      "email-assignment-select",
+      "category-select",
+      "fetch-netflix-code-button",
+      "copy-code-button",
+      "parsed-code-display",
+      "parsed-timestamp-display"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Ensure all frontend components reside in standard React .js format with Tailwind CSS classes.",
+    "Implement Microsoft OAuth flow simulation / API connection endpoints for backend `/api/auth/microsoft` and `/api/mailboxes` so administrators can connect, view, and refresh personal Outlook tokens.",
+    "Maintain backward compatibility with existing IMAP / Gmail fetching while prioritizing direct Microsoft Graph search when mapped provider is `outlook_graph`.",
+    "Provide clear alert prompts and visual badge states for connected vs needs_reconnect Outlook mailboxes.",
+    "Add interactive copy-to-clipboard buttons with toast feedback (sonner) when clicking on extracted Netflix login codes or verification links.",
+    "Strictly follow the dark high-density dashboard UI guidelines with zero white text collision and high contrast APCA compliance."
+  ]
+}
