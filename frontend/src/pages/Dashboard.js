@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import Navbar from "@/components/Navbar";
 import MailboxesTab from "@/components/MailboxesTab";
 import AssignmentsTab from "@/components/AssignmentsTab";
+import HoldReportTab from "@/components/HoldReportTab";
 import CodeSearchTab from "@/components/CodeSearchTab";
 
 const ERROR_MESSAGES = {
@@ -62,6 +63,7 @@ export default function Dashboard() {
           <MailboxesTab status={status} refreshKey={refreshKey} onChanged={() => setRefreshKey((k) => k + 1)} />
         )}
         {active === "assignments" && <AssignmentsTab onChanged={() => setRefreshKey((k) => k + 1)} />}
+        {active === "hold" && <HoldReportTab />}
         {active === "search" && <CodeSearchTab />}
       </main>
     </div>
