@@ -50,6 +50,46 @@ def normalize_email(e: str) -> str:
     return (e or "").strip().lower()
 
 
+def parse_expiry(value: str | None):
+    """Accepts a date ('2026-10-15') or full ISO datetime and returns an
+    end-of-day UTC datetime for a bare date, so the assignment stays valid
+    through the whole day it expires on."""
+    if not value:
+        return None
+    v = value.strip()
+    try:
+        if len(v) <= 10:  # bare date, e.g. 2026-10-15
+            dt = datetime.fromisoformat(v)
+            dt = dt.replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+        else:
+            dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        raise HTTPException(status_code=400, detail="expires_at must be a valid date (YYYY-MM-DD) or ISO datetime")
+
+
+async def expire_if_needed(doc: dict) -> dict:
+    """Auto-unassigns an assignment once its expires_at has passed. Called on
+    every read path (list + the shared fetch gate used by web and Telegram)
+    so expiry takes effect immediately, not just on a periodic sweep."""
+    expires_at = doc.get("expires_at")
+    if not expires_at or not doc.get("assigned_user_id"):
+        return doc
+    try:
+        exp_dt = datetime.fromisoformat(expires_at)
+    except ValueError:
+        return doc
+    if datetime.now(timezone.utc) >= exp_dt:
+        await db.email_assignments.update_one(
+            {"id": doc["id"]}, {"$set": {"assigned_user_id": None, "unassigned_reason": "expired"}}
+        )
+        doc["assigned_user_id"] = None
+        doc["unassigned_reason"] = "expired"
+    return doc
+
+
 # ---------- Models ----------
 class LoginReq(BaseModel):
     email: EmailStr
@@ -67,10 +107,12 @@ class AssignmentCreate(BaseModel):
     provider: str = "outlook_graph"
     label: str = ""
     assigned_user_id: str | None = None
+    expires_at: str | None = None  # ISO date ("2026-10-15") or datetime; auto-unassigns after this
 
 
 class AssignmentUpdate(BaseModel):
     provider: str
+    expires_at: str | None = "__unset__"  # sentinel: omit field entirely to leave unchanged
 
 
 class AssignReq(BaseModel):
@@ -186,6 +228,9 @@ async def list_assignments(user=Depends(get_current_user)):
     # it moves into that member's own filtered view instead of the sub_admin's.
     query = {} if user.get("role") == "admin" else {"assigned_user_id": user["id"]}
     docs = await db.email_assignments.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    docs = [await expire_if_needed(d) for d in docs]
+    if user.get("role") != "admin":
+        docs = [d for d in docs if d.get("assigned_user_id") == user["id"]]
     mailboxes = await db.mailbox_accounts.find({}, {"_id": 0, "ms_refresh_token_enc": 0}).to_list(500)
     mb_by_email = {m["email_norm"]: m for m in mailboxes}
     for d in docs:
@@ -207,12 +252,14 @@ async def create_assignment(body: AssignmentCreate, admin=Depends(get_current_ad
         target = await db.users.find_one({"id": body.assigned_user_id})
         if not target:
             raise HTTPException(status_code=404, detail="Assigned user not found")
+    expires_dt = parse_expiry(body.expires_at)
     doc = {
         "id": str(uuid.uuid4()),
         "email_norm": email_norm,
         "provider": body.provider,
         "label": body.label or "",
         "assigned_user_id": body.assigned_user_id,
+        "expires_at": expires_dt.isoformat() if expires_dt else None,
         "created_at": now_iso(),
     }
     await db.email_assignments.insert_one(doc)
@@ -224,8 +271,12 @@ async def create_assignment(body: AssignmentCreate, admin=Depends(get_current_ad
 async def update_assignment(assignment_id: str, body: AssignmentUpdate, admin=Depends(get_current_admin)):
     if body.provider not in PROVIDERS:
         raise HTTPException(status_code=400, detail="Invalid provider")
+    update = {"provider": body.provider}
+    if body.expires_at != "__unset__":
+        expires_dt = parse_expiry(body.expires_at)
+        update["expires_at"] = expires_dt.isoformat() if expires_dt else None
     res = await db.email_assignments.update_one(
-        {"id": assignment_id}, {"$set": {"provider": body.provider}}
+        {"id": assignment_id}, {"$set": update}
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Assignment not found")
@@ -254,6 +305,43 @@ async def delete_assignment(assignment_id: str, admin=Depends(get_current_admin)
     await db.email_assignments.delete_one({"id": assignment_id})
     await db.mailbox_accounts.delete_one({"email_norm": doc["email_norm"]})
     return {"ok": True}
+
+
+@api.get("/reports/hold")
+async def hold_report(staff=Depends(get_current_staff)):
+    """Scans every connected Outlook mailbox for a current 'account on hold'
+    email (the account_hold category — matched in a language-independent way
+    via Netflix's payment-update link, not by keyword), and reports which
+    assigned accounts currently have one. A sub_admin only sees mailboxes
+    assigned to them, matching the same scoping used everywhere else."""
+    assignments = await db.email_assignments.find({}, {"_id": 0}).to_list(500)
+    assignments = [await expire_if_needed(d) for d in assignments]
+    if staff.get("role") != "admin":
+        assignments = [d for d in assignments if d.get("assigned_user_id") == staff["id"]]
+
+    mailboxes = await db.mailbox_accounts.find(
+        {"provider": "outlook_graph", "status": "connected"}, {"_id": 0}
+    ).to_list(500)
+    mb_by_email = {m["email_norm"]: m for m in mailboxes}
+
+    results = []
+    for a in assignments:
+        mailbox = mb_by_email.get(a["email_norm"])
+        if not mailbox:
+            continue
+        outcome = await fetch_netflix_code(mailbox, a["email_norm"], "account_hold", "outlook_graph")
+        if outcome.get("status") == "found":
+            msg = outcome["message"]
+            results.append({
+                "email_norm": a["email_norm"],
+                "mailbox_email": mailbox.get("mailbox_email"),
+                "assigned_user_id": a.get("assigned_user_id"),
+                "received": msg.get("received"),
+                "link": msg.get("link"),
+            })
+
+    results.sort(key=lambda r: r.get("received") or "", reverse=True)
+    return {"count": len(results), "accounts": results}
 
 
 # ---------- Mailboxes ----------
@@ -357,6 +445,7 @@ async def perform_search(user: dict, email_norm: str, category: str) -> dict:
     assignment = await db.email_assignments.find_one({"email_norm": email_norm})
     if not assignment:
         raise HTTPException(status_code=404, detail="No assignment for this email")
+    assignment = await expire_if_needed(assignment)
     # Only full admin can fetch any mailbox. A sub_admin is otherwise scoped
     # exactly like a member: they can only fetch from mailboxes assigned to
     # THEM — matching the /assignments view above, so what a sub_admin can see
