@@ -88,6 +88,23 @@ CATEGORIES = {
         ],
         "extract": "code",
     },
+    "account_hold": {
+        "label": "Account Hold",
+        "description": "Payment issue / account on hold — update payment link",
+        "keywords": [
+            "account on hold", "update required", "trouble with your billing",
+            "payment details", "update your payment",
+            "conta em espera", "problema com a cobrança", "atualizar forma de pagamento",
+            "cuenta en pausa", "problema con tu facturación", "actualizar forma de pago",
+            "compte en attente", "probleme de facturation", "mettre a jour vos informations de paiement",
+            "konto pausiert", "problem mit deiner zahlung", "zahlungsinformationen aktualisieren",
+            "account in sospeso", "problema con la fatturazione", "aggiorna il tuo pagamento",
+        ],
+        "extract": "link",
+        # Language-independent: Netflix's "update payment" CTA always points
+        # here regardless of the recipient's locale or exact subject wording.
+        "url_patterns": ["/YourAccountPayment"],
+    },
 }
 
 
@@ -115,6 +132,7 @@ def _html_to_text(html: str) -> str:
 _LINK_PRIORITY = {
     "password_reset": ["password", "reset", "senha", "contrase", "mot-de-passe", "mot_de_passe", "passwort"],
     "household": ["household", "hogar", "foyer", "haushalt", "residen", "nucleo", "confirm", "update", "travel", "verify"],
+    "account_hold": ["youraccountpayment", "payment", "billing", "pagamento", "facturacion", "zahlung"],
 }
 _LINK_PRIORITY_FALLBACK = ["password", "household", "verify", "confirm", "travel", "getcode", "get-code", "update", "account/"]
 
