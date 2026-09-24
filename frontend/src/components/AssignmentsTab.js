@@ -126,6 +126,7 @@ export default function AssignmentsTab({ onChanged }) {
   const [email, setEmail] = useState("");
   const [provider, setProvider] = useState("outlook_graph");
   const [label, setLabel] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
   const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
@@ -152,10 +153,11 @@ export default function AssignmentsTab({ onChanged }) {
     e.preventDefault();
     setAdding(true);
     try {
-      await api.post("/assignments", { email, provider, label });
+      await api.post("/assignments", { email, provider, label, expires_at: expiresAt || null });
       toast.success("Assignment added");
       setEmail("");
       setLabel("");
+      setExpiresAt("");
       await load();
       onChanged?.();
     } catch (err) {
@@ -168,6 +170,17 @@ export default function AssignmentsTab({ onChanged }) {
   const changeProvider = async (id, newProvider) => {
     try {
       await api.patch(`/assignments/${id}`, { provider: newProvider });
+      await load();
+      onChanged?.();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    }
+  };
+
+  const changeExpiry = async (id, currentProvider, newExpiresAt) => {
+    try {
+      await api.patch(`/assignments/${id}`, { provider: currentProvider, expires_at: newExpiresAt || null });
+      toast.success(newExpiresAt ? "Expiration date set" : "Expiration removed");
       await load();
       onChanged?.();
     } catch (err) {
@@ -260,6 +273,16 @@ export default function AssignmentsTab({ onChanged }) {
                 className="bg-black/40 border-white/10 text-slate-100 h-10 focus-visible:ring-[#E50914]/40 focus-visible:border-[#E50914]/50"
               />
             </div>
+            <div className="w-full md:w-44 space-y-1.5">
+              <label className="text-xs text-slate-500 uppercase tracking-wide">Expires (opt)</label>
+              <Input
+                data-testid="assignment-expires-input"
+                type="date"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                className="bg-black/40 border-white/10 text-slate-100 h-10 focus-visible:ring-[#E50914]/40 focus-visible:border-[#E50914]/50"
+              />
+            </div>
             <Button
               type="submit"
               data-testid="add-assignment-button"
@@ -295,6 +318,7 @@ export default function AssignmentsTab({ onChanged }) {
                 <th className="px-5 py-3 font-medium">Email</th>
                 <th className="px-5 py-3 font-medium">Provider</th>
                 <th className="px-5 py-3 font-medium">Assigned to</th>
+                <th className="px-5 py-3 font-medium">Expires</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium text-right">Actions</th>
               </tr>
@@ -342,6 +366,29 @@ export default function AssignmentsTab({ onChanged }) {
                         ))}
                       </SelectContent>
                     </Select>
+                    {!r.assigned_user_id && r.unassigned_reason === "expired" && (
+                      <div className="text-[11px] text-amber-400 mt-1">Auto-unassigned (expired)</div>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {isAdmin ? (
+                      <Input
+                        type="date"
+                        data-testid={`assignment-expires-${r.email_norm}`}
+                        defaultValue={r.expires_at ? r.expires_at.slice(0, 10) : ""}
+                        onBlur={(e) => {
+                          const v = e.target.value;
+                          if (v !== (r.expires_at ? r.expires_at.slice(0, 10) : "")) {
+                            changeExpiry(r.id, r.provider, v);
+                          }
+                        }}
+                        className="h-8 w-36 bg-black/30 border-white/10 text-xs text-slate-200"
+                      />
+                    ) : r.expires_at ? (
+                      <span className="text-xs text-slate-400">{r.expires_at.slice(0, 10)}</span>
+                    ) : (
+                      <span className="text-xs text-slate-600">—</span>
+                    )}
                   </td>
                   <td className="px-5 py-3.5">
                     {r.provider === "outlook_graph" ? (
