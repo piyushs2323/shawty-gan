@@ -1,4 +1,4 @@
-import { Play, LogOut, Inbox, ListChecks, Search, AlertTriangle } from "lucide-react";
+import { Play, LogOut, Inbox, ListChecks, Search, AlertTriangle, MailOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 
@@ -6,6 +6,7 @@ const TABS = [
   { key: "mailboxes", label: "Mailboxes", icon: Inbox, testid: "nav-mailboxes-tab", adminOnly: true },
   { key: "assignments", label: "Assignments", icon: ListChecks, testid: "nav-assignments-tab", staffOnly: true },
   { key: "hold", label: "Hold Report", icon: AlertTriangle, testid: "nav-hold-report-tab", staffOnly: true },
+  { key: "inbox", label: "Inbox", icon: MailOpen, testid: "nav-inbox-tab", adminOnly: false },
   { key: "search", label: "Code Search", icon: Search, testid: "nav-code-search-tab", adminOnly: false },
 ];
 
