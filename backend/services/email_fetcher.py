@@ -362,14 +362,16 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
         M = imaplib.IMAP4_SSL("imap.gmail.com")
         M.login(user, pw)
         M.select("INBOX")
-        typ, data = M.search(None, '(OR FROM "netflix" SUBJECT "netflix")')
+        # Search broadly: FROM netflix OR SUBJECT netflix OR SUBJECT "Netflix"
+        # Also search forwarded subjects that may contain Netflix anywhere
+        typ, data = M.search(None, 'OR OR FROM "netflix" SUBJECT "netflix" SUBJECT "Netflix"')
         ids = data[0].split()
         if not ids:
             M.logout()
             return {"status": "empty"}
         kws = [k.lower() for k in cfg["keywords"]]
         url_patterns = [p.lower() for p in cfg.get("url_patterns", [])]
-        for mid in reversed(ids[-25:]):
+        for mid in reversed(ids[-50:]):
             typ, msg_data = M.fetch(mid, "(RFC822)")
             raw = msg_data[0][1]
             m = email_lib.message_from_bytes(raw)
@@ -387,7 +389,9 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
             # Check all headers for the target email (covers X-Forwarded-For, X-Original-To, To, Delivered-To etc.)
             all_headers = " ".join(str(v) for v in m.values()).lower()
             haystack = (subject + " " + body_text + " " + body_html).lower()
-            email_found = (email_norm.lower() in haystack) or (email_norm.lower() in all_headers)
+            target = email_norm.lower()
+            local_part = target.split("@")[0]
+            email_found = (target in haystack) or (target in all_headers) or (local_part in all_headers)
             # body_html already contains the raw href URLs, so url_patterns
             # match here too — this is what makes household/travel-code
             # detection language-independent instead of keyword-only.
