@@ -362,7 +362,7 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
         M = imaplib.IMAP4_SSL("imap.gmail.com")
         M.login(user, pw)
         M.select("INBOX")
-        typ, data = M.search(None, '(OR FROM "netflix" SUBJECT "netflix" TO "%s")' % email_norm)
+        typ, data = M.search(None, '(OR FROM "netflix" SUBJECT "netflix")')
         ids = data[0].split()
         if not ids:
             M.logout()
@@ -388,7 +388,7 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
             # body_html already contains the raw href URLs, so url_patterns
             # match here too — this is what makes household/travel-code
             # detection language-independent instead of keyword-only.
-            if any(k in haystack for k in kws) or any(p in haystack for p in url_patterns):
+            if (email_norm.lower() in haystack) and (any(k in haystack for k in kws) or any(p in haystack for p in url_patterns)):
                 parsed = parse_netflix_email(subject, body_text, body_html, cfg["extract"], category_key)
                 M.logout()
                 return {
