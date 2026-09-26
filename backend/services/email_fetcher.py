@@ -384,11 +384,14 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
                         body_html = part.get_payload(decode=True).decode(errors="ignore")
             else:
                 body_text = m.get_payload(decode=True).decode(errors="ignore")
+            # Check all headers for the target email (covers X-Forwarded-For, X-Original-To, To, Delivered-To etc.)
+            all_headers = " ".join(str(v) for v in m.values()).lower()
             haystack = (subject + " " + body_text + " " + body_html).lower()
+            email_found = (email_norm.lower() in haystack) or (email_norm.lower() in all_headers)
             # body_html already contains the raw href URLs, so url_patterns
             # match here too — this is what makes household/travel-code
             # detection language-independent instead of keyword-only.
-            if (email_norm.lower() in haystack) and (any(k in haystack for k in kws) or any(p in haystack for p in url_patterns)):
+            if email_found and (any(k in haystack for k in kws) or any(p in haystack for p in url_patterns)):
                 parsed = parse_netflix_email(subject, body_text, body_html, cfg["extract"], category_key)
                 M.logout()
                 return {
