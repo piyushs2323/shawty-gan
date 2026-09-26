@@ -362,7 +362,7 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
         M = imaplib.IMAP4_SSL("imap.gmail.com")
         M.login(user, pw)
         M.select("INBOX")
-        typ, data = M.search(None, '(FROM "netflix" TO "%s")' % email_norm)
+        typ, data = M.search(None, '(OR FROM "netflix" SUBJECT "netflix" TO "%s")' % email_norm)
         ids = data[0].split()
         if not ids:
             M.logout()
