@@ -29,6 +29,7 @@ from services.email_fetcher import (
     CATEGORIES,
     categories_list,
     fetch_netflix_code,
+    fetch_inbox_preview,
 )
 from services import telegram_bot
 from crypto_utils import encrypt_token
@@ -113,6 +114,13 @@ class AssignmentCreate(BaseModel):
 class AssignmentUpdate(BaseModel):
     provider: str
     expires_at: str | None = "__unset__"  # sentinel: omit field entirely to leave unchanged
+
+
+class BulkAssignReq(BaseModel):
+    emails: list[str]
+    provider: str = "outlook_graph"
+    assigned_user_id: str | None = None
+    expires_at: str | None = None
 
 
 class AssignReq(BaseModel):
@@ -265,6 +273,53 @@ async def create_assignment(body: AssignmentCreate, admin=Depends(get_current_ad
     await db.email_assignments.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+
+@api.post("/assignments/bulk")
+async def bulk_assign(body: BulkAssignReq, admin=Depends(get_current_admin)):
+    """Assign (or create) many emails at once to one user with one shared
+    expiry date. An email already in email_assignments gets its assignment,
+    provider and expiry updated rather than erroring — this doubles as a bulk
+    re-assign tool, not just bulk create."""
+    if body.provider not in PROVIDERS:
+        raise HTTPException(status_code=400, detail="Invalid provider")
+    if body.assigned_user_id:
+        target = await db.users.find_one({"id": body.assigned_user_id})
+        if not target:
+            raise HTTPException(status_code=404, detail="Assigned user not found")
+    expires_dt = parse_expiry(body.expires_at)
+    expires_iso = expires_dt.isoformat() if expires_dt else None
+
+    created, updated, skipped = [], [], []
+    for raw in body.emails:
+        email_norm = normalize_email(raw)
+        if not email_norm or "@" not in email_norm:
+            skipped.append(raw)
+            continue
+        existing = await db.email_assignments.find_one({"email_norm": email_norm})
+        if existing:
+            await db.email_assignments.update_one(
+                {"id": existing["id"]},
+                {"$set": {
+                    "assigned_user_id": body.assigned_user_id,
+                    "expires_at": expires_iso,
+                    "provider": body.provider,
+                }},
+            )
+            updated.append(email_norm)
+        else:
+            await db.email_assignments.insert_one({
+                "id": str(uuid.uuid4()),
+                "email_norm": email_norm,
+                "provider": body.provider,
+                "label": "",
+                "assigned_user_id": body.assigned_user_id,
+                "expires_at": expires_iso,
+                "created_at": now_iso(),
+            })
+            created.append(email_norm)
+
+    return {"created": created, "updated": updated, "skipped": skipped}
 
 
 @api.patch("/assignments/{assignment_id}")
@@ -433,6 +488,41 @@ async def disconnect_mailbox(email_norm: str, admin=Depends(get_current_admin)):
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Mailbox not connected")
     return {"ok": True}
+
+
+@api.get("/mailboxes/{email_norm}/inbox")
+async def mailbox_inbox(email_norm: str, user=Depends(get_current_user)):
+    """Live inbox preview for a connected Outlook mailbox — the actual recent
+    messages, not filtered to Netflix, so someone can see what's coming into
+    an assigned mailbox directly on the site. Same ownership rule as
+    perform_search: admin sees any mailbox, everyone else only one assigned
+    to them, and it must not be expired."""
+    email_norm = normalize_email(email_norm)
+    assignment = await db.email_assignments.find_one({"email_norm": email_norm})
+    if not assignment:
+        raise HTTPException(status_code=404, detail="No assignment for this email")
+    assignment = await expire_if_needed(assignment)
+    if user.get("role") != "admin" and assignment.get("assigned_user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="This email is not assigned to you")
+    if assignment["provider"] != "outlook_graph":
+        raise HTTPException(status_code=400, detail="Inbox preview is only available for Outlook mailboxes")
+
+    mailbox = await db.mailbox_accounts.find_one({"email_norm": email_norm})
+    if not mailbox or mailbox.get("status") != "connected":
+        return {"status": "not_connected", "messages": []}
+
+    result = await fetch_inbox_preview(mailbox)
+    if result.get("new_refresh"):
+        await db.mailbox_accounts.update_one(
+            {"email_norm": email_norm},
+            {"$set": {"ms_refresh_token_enc": encrypt_token(result["new_refresh"]), "updated_at": now_iso()}},
+        )
+    if result.get("status") == "needs_reconnect" and mailbox:
+        await db.mailbox_accounts.update_one(
+            {"email_norm": email_norm},
+            {"$set": {"status": "needs_reconnect", "updated_at": now_iso()}},
+        )
+    return result
 
 
 # ---------- Search ----------
