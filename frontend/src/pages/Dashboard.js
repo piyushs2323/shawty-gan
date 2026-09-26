@@ -7,6 +7,7 @@ import Navbar from "@/components/Navbar";
 import MailboxesTab from "@/components/MailboxesTab";
 import AssignmentsTab from "@/components/AssignmentsTab";
 import HoldReportTab from "@/components/HoldReportTab";
+import InboxTab from "@/components/InboxTab";
 import CodeSearchTab from "@/components/CodeSearchTab";
 
 const ERROR_MESSAGES = {
@@ -64,6 +65,7 @@ export default function Dashboard() {
         )}
         {active === "assignments" && <AssignmentsTab onChanged={() => setRefreshKey((k) => k + 1)} />}
         {active === "hold" && <HoldReportTab />}
+        {active === "inbox" && <InboxTab />}
         {active === "search" && <CodeSearchTab />}
       </main>
     </div>
