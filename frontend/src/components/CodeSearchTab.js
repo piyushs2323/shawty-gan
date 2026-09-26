@@ -5,6 +5,7 @@ import {
   MailX, PlugZap, Clock, AlertTriangle, ShieldCheck, Lock, Tv, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -94,18 +95,19 @@ export default function CodeSearchTab() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs text-slate-500 uppercase tracking-wide">Netflix email</label>
-            <Select value={emailNorm} onValueChange={setEmailNorm}>
-              <SelectTrigger data-testid="email-assignment-select" className="bg-black/40 border-white/10 text-slate-100">
-                <SelectValue placeholder="Select email…" />
-              </SelectTrigger>
-              <SelectContent>
-                {assignments.map((a) => (
-                  <SelectItem key={a.email_norm} value={a.email_norm}>
-                    {a.email_norm}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input
+              data-testid="email-assignment-select"
+              list="assigned-emails-list"
+              value={emailNorm}
+              onChange={(e) => setEmailNorm(e.target.value.trim().toLowerCase())}
+              placeholder="Type or pick an assigned email…"
+              className="bg-black/40 border-white/10 text-slate-100 h-10 focus-visible:ring-[#E50914]/40 focus-visible:border-[#E50914]/50"
+            />
+            <datalist id="assigned-emails-list">
+              {assignments.map((a) => (
+                <option key={a.email_norm} value={a.email_norm} />
+              ))}
+            </datalist>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs text-slate-500 uppercase tracking-wide">Category</label>
