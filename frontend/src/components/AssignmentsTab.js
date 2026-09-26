@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, ListChecks, ShieldCheck, Users2 } from "lucide-react";
+import { Plus, Trash2, Loader2, ListChecks, ShieldCheck, Users2, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -114,6 +115,130 @@ function TeamPanel() {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function BulkAssignPanel({ users, onDone }) {
+  const [emailsText, setEmailsText] = useState("");
+  const [provider, setProvider] = useState("outlook_graph");
+  const [userId, setUserId] = useState("unassigned");
+  const [expiresAt, setExpiresAt] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const parseEmails = (text) =>
+    text
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const emails = parseEmails(emailsText);
+    if (emails.length === 0) {
+      toast.error("Paste at least one email");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { data } = await api.post("/assignments/bulk", {
+        emails,
+        provider,
+        assigned_user_id: userId === "unassigned" ? null : userId,
+        expires_at: expiresAt || null,
+      });
+      toast.success(
+        `${data.created.length} created, ${data.updated.length} updated` +
+          (data.skipped.length ? `, ${data.skipped.length} skipped (invalid)` : "")
+      );
+      setEmailsText("");
+      setExpiresAt("");
+      onDone?.();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="h24-card p-5">
+      <div className="flex items-center gap-2 mb-4 text-slate-300">
+        <div className="h-6 w-6 rounded-md bg-[#E50914]/15 border border-[#E50914]/30 flex items-center justify-center">
+          <Layers className="h-3.5 w-3.5 text-[#E50914]" />
+        </div>
+        <span className="eyebrow">Bulk assign</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label className="text-xs text-slate-500 uppercase tracking-wide">
+            Emails (one per line, or comma-separated)
+          </label>
+          <Textarea
+            data-testid="bulk-assign-emails-input"
+            value={emailsText}
+            onChange={(e) => setEmailsText(e.target.value)}
+            placeholder={"user1@outlook.com\nuser2@outlook.com\nuser3@outlook.com"}
+            rows={5}
+            className="bg-black/40 border-white/10 text-slate-100 focus-visible:ring-[#E50914]/40 focus-visible:border-[#E50914]/50"
+          />
+          <div className="text-xs text-slate-600">
+            {parseEmails(emailsText).length} email{parseEmails(emailsText).length === 1 ? "" : "s"} detected
+          </div>
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-500 uppercase tracking-wide">Assign to</label>
+            <Select value={userId} onValueChange={setUserId}>
+              <SelectTrigger data-testid="bulk-assign-user-select" className="bg-black/40 border-white/10 text-slate-100 h-10">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.name || u.email}
+                    {u.role === "sub_admin" && <span className="text-emerald-400"> · Sub-admin</span>}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500 uppercase tracking-wide">Provider</label>
+              <Select value={provider} onValueChange={setProvider}>
+                <SelectTrigger data-testid="bulk-assign-provider-select" className="bg-black/40 border-white/10 text-slate-100 h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="outlook_graph">Outlook (Graph)</SelectItem>
+                  <SelectItem value="gmail_imap">Gmail (IMAP)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500 uppercase tracking-wide">Expires (opt)</label>
+              <Input
+                data-testid="bulk-assign-expires-input"
+                type="date"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                className="bg-black/40 border-white/10 text-slate-100 h-10 focus-visible:ring-[#E50914]/40 focus-visible:border-[#E50914]/50"
+              />
+            </div>
+          </div>
+          <Button
+            type="submit"
+            data-testid="bulk-assign-submit-button"
+            disabled={submitting}
+            className="w-full bg-[#E50914] hover:bg-[#c40810] text-white font-semibold h-10"
+          >
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Layers className="h-4 w-4 mr-2" />}
+            Bulk assign
+          </Button>
+        </div>
+      </div>
+    </form>
   );
 }
 
@@ -295,6 +420,8 @@ export default function AssignmentsTab({ onChanged }) {
           </div>
         </form>
       )}
+
+      {isAdmin && <BulkAssignPanel users={users} onDone={() => { load(); onChanged?.(); }} />}
 
       <div data-testid="email-assignments-table" className="h24-card overflow-hidden">
         {loading ? (
