@@ -417,3 +417,53 @@ async def fetch_netflix_code(mailbox: dict, email_norm: str, category_key: str, 
     if provider == "outlook_graph":
         return await _fetch_via_graph(mailbox, cfg, category_key)
     return _fetch_via_gmail_imap(email_norm, cfg, category_key)
+
+
+async def fetch_inbox_preview(mailbox: dict, limit: int = 25) -> dict:
+    """Raw recent-message list for a connected Outlook mailbox — not filtered
+    to Netflix or any category, just the actual inbox contents, for the
+    website's inbox viewer. Only supports outlook_graph for now."""
+    try:
+        refresh = decrypt_token(mailbox["ms_refresh_token_enc"])
+    except Exception:
+        return {"status": "needs_reconnect", "reason": "decrypt_failed"}
+
+    result = acquire_from_refresh(refresh)
+    if "access_token" not in result:
+        err = result.get("error", "")
+        if err in REAUTH_ERRORS:
+            return {"status": "needs_reconnect", "reason": err or "token_expired"}
+        return {"status": "error", "reason": result.get("error_description", "token_error")}
+
+    access_token = result["access_token"]
+    new_refresh = result.get("refresh_token")
+
+    params = {
+        "$top": min(max(limit, 1), 50),
+        "$orderby": "receivedDateTime desc",
+        "$select": "id,subject,from,receivedDateTime,bodyPreview,webLink,isRead",
+    }
+    resp = await graph_get(access_token, "/me/messages", params)
+    if resp is None:
+        return {"status": "error", "reason": "no_response", "new_refresh": new_refresh}
+    if resp.status_code == 401:
+        return {"status": "needs_reconnect", "reason": "unauthorized"}
+    if resp.status_code == 429:
+        return {"status": "throttled", "reason": "rate_limited", "new_refresh": new_refresh}
+    if resp.status_code >= 400:
+        return {"status": "error", "reason": f"graph_{resp.status_code}", "new_refresh": new_refresh}
+
+    messages = resp.json().get("value", [])
+    items = []
+    for m in messages:
+        frm = ((m.get("from") or {}).get("emailAddress") or {}).get("address", "")
+        items.append({
+            "id": m.get("id", ""),
+            "subject": m.get("subject", ""),
+            "from": frm,
+            "received": m.get("receivedDateTime", ""),
+            "preview": m.get("bodyPreview", ""),
+            "web_link": m.get("webLink", ""),
+            "is_read": m.get("isRead", True),
+        })
+    return {"status": "ok", "new_refresh": new_refresh, "messages": items}
