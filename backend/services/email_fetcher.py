@@ -362,20 +362,24 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
         M = imaplib.IMAP4_SSL("imap.gmail.com")
         M.login(user, pw)
         M.select("INBOX")
-        # Search broadly: FROM netflix OR SUBJECT netflix OR SUBJECT "Netflix"
-        # Also search forwarded subjects that may contain Netflix anywhere
-        typ, data = M.search(None, 'OR OR FROM "netflix" SUBJECT "netflix" SUBJECT "Netflix"')
+        # Fetch last 7 days of all mail — filter in Python so we catch
+        # forwarded emails from any domain with any subject language
+        from datetime import datetime, timedelta
+        since = (datetime.utcnow() - timedelta(days=7)).strftime("%d-%b-%Y")
+        typ, data = M.search(None, f'(SINCE "{since}")')
         ids = data[0].split()
         if not ids:
             M.logout()
             return {"status": "empty"}
         kws = [k.lower() for k in cfg["keywords"]]
         url_patterns = [p.lower() for p in cfg.get("url_patterns", [])]
-        for mid in reversed(ids[-50:]):
+        target = email_norm.lower()
+        local_part = target.split("@")[0]
+        for mid in reversed(ids[-100:]):
             typ, msg_data = M.fetch(mid, "(RFC822)")
             raw = msg_data[0][1]
             m = email_lib.message_from_bytes(raw)
-            subject = _decode(m.get("Subject"))
+            subject = _decode(m.get("Subject", ""))
             body_text, body_html = "", ""
             if m.is_multipart():
                 for part in m.walk():
@@ -386,16 +390,16 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
                         body_html = part.get_payload(decode=True).decode(errors="ignore")
             else:
                 body_text = m.get_payload(decode=True).decode(errors="ignore")
-            # Check all headers for the target email (covers X-Forwarded-For, X-Original-To, To, Delivered-To etc.)
+            # Check all headers for the target email
             all_headers = " ".join(str(v) for v in m.values()).lower()
             haystack = (subject + " " + body_text + " " + body_html).lower()
-            target = email_norm.lower()
-            local_part = target.split("@")[0]
+            # Must be a Netflix email (body contains netflix.com) AND target email found somewhere
+            is_netflix = "netflix.com" in haystack or "account.netflix.com" in all_headers
             email_found = (target in haystack) or (target in all_headers) or (local_part in all_headers)
             # body_html already contains the raw href URLs, so url_patterns
             # match here too — this is what makes household/travel-code
             # detection language-independent instead of keyword-only.
-            if email_found and (any(k in haystack for k in kws) or any(p in haystack for p in url_patterns)):
+            if is_netflix and email_found and (any(k in haystack for k in kws) or any(p in haystack for p in url_patterns)):
                 parsed = parse_netflix_email(subject, body_text, body_html, cfg["extract"], category_key)
                 M.logout()
                 return {
