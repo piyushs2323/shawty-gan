@@ -2,6 +2,7 @@ import os
 import uuid
 import logging
 import secrets
+import asyncio
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -30,6 +31,7 @@ from services.email_fetcher import (
     categories_list,
     fetch_netflix_code,
     fetch_inbox_preview,
+    _fetch_via_gmail_imap,
 )
 from services import telegram_bot
 from crypto_utils import encrypt_token
@@ -546,12 +548,17 @@ async def perform_search(user: dict, email_norm: str, category: str) -> dict:
     provider = assignment["provider"]
     mailbox = await db.mailbox_accounts.find_one({"email_norm": email_norm})
 
-    if provider == "outlook_graph":
-        if not mailbox or mailbox.get("status") != "connected":
-            return {"found": False, "reason": "not_connected", "provider": provider}
+    # Always try Gmail IMAP (catches forwarded emails regardless of OAuth status)
+    gmail_result = await asyncio.to_thread(_fetch_via_gmail_imap, email_norm, CATEGORIES[category], category)
+
+    if provider == "outlook_graph" and mailbox and mailbox.get("status") == "connected":
+        # OAuth connected — try Graph first, fall back to Gmail if Graph finds nothing
         result = await fetch_netflix_code(mailbox, email_norm, category, provider)
+        if result.get("status") != "found" and gmail_result.get("status") == "found":
+            result = gmail_result
     else:
-        result = await fetch_netflix_code(mailbox or {}, email_norm, category, provider)
+        # Not connected via OAuth — use Gmail only
+        result = gmail_result
 
     status = result.get("status")
 
