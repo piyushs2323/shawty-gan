@@ -362,10 +362,8 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
         M = imaplib.IMAP4_SSL("imap.gmail.com")
         M.login(user, pw)
         M.select("INBOX")
-        # Fetch last 7 days of all mail — filter in Python so we catch
-        # forwarded emails from any domain with any subject language
         from datetime import datetime, timedelta
-        since = (datetime.utcnow() - timedelta(days=7)).strftime("%d-%b-%Y")
+        since = (datetime.utcnow() - timedelta(days=1)).strftime("%d-%b-%Y")
         typ, data = M.search(None, f'(SINCE "{since}")')
         ids = data[0].split()
         if not ids:
@@ -375,11 +373,22 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
         url_patterns = [p.lower() for p in cfg.get("url_patterns", [])]
         target = email_norm.lower()
         local_part = target.split("@")[0]
-        for mid in reversed(ids[-100:]):
+        for mid in reversed(ids[-20:]):
+            # Step 1: fetch headers only (fast)
+            typ, hdr_data = M.fetch(mid, "(BODY.PEEK[HEADER])")
+            hdr_raw = hdr_data[0][1]
+            hdr_msg = email_lib.message_from_bytes(hdr_raw)
+            all_headers = " ".join(str(v) for v in hdr_msg.values()).lower()
+            subject = _decode(hdr_msg.get("Subject", ""))
+            # Must look like a Netflix-related email and contain target email in headers
+            is_netflix = "netflix" in all_headers or "netflix" in subject.lower()
+            email_found = (target in all_headers) or (local_part in all_headers)
+            if not (is_netflix and email_found):
+                continue
+            # Step 2: only now fetch full body
             typ, msg_data = M.fetch(mid, "(RFC822)")
             raw = msg_data[0][1]
             m = email_lib.message_from_bytes(raw)
-            subject = _decode(m.get("Subject", ""))
             body_text, body_html = "", ""
             if m.is_multipart():
                 for part in m.walk():
@@ -390,16 +399,11 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
                         body_html = part.get_payload(decode=True).decode(errors="ignore")
             else:
                 body_text = m.get_payload(decode=True).decode(errors="ignore")
-            # Check all headers for the target email
-            all_headers = " ".join(str(v) for v in m.values()).lower()
+            all_headers_full = " ".join(str(v) for v in m.values()).lower()
             haystack = (subject + " " + body_text + " " + body_html).lower()
-            # Must be a Netflix email (body contains netflix.com) AND target email found somewhere
-            is_netflix = "netflix.com" in haystack or "account.netflix.com" in all_headers
-            email_found = (target in haystack) or (target in all_headers) or (local_part in all_headers)
-            # body_html already contains the raw href URLs, so url_patterns
-            # match here too — this is what makes household/travel-code
-            # detection language-independent instead of keyword-only.
-            if is_netflix and email_found and (any(k in haystack for k in kws) or any(p in haystack for p in url_patterns)):
+            is_netflix_full = "netflix.com" in haystack or "netflix" in all_headers_full
+            email_found_full = (target in haystack) or (target in all_headers_full) or (local_part in all_headers_full)
+            if is_netflix_full and email_found_full and (any(k in haystack for k in kws) or any(p in haystack for p in url_patterns)):
                 parsed = parse_netflix_email(subject, body_text, body_html, cfg["extract"], category_key)
                 M.logout()
                 return {
