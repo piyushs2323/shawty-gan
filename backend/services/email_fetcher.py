@@ -363,7 +363,7 @@ def _fetch_via_gmail_imap(email_norm: str, cfg: dict, category_key: str) -> dict
         M.login(user, pw)
         M.select("INBOX")
         from datetime import datetime, timedelta
-        since = (datetime.utcnow() - timedelta(days=1)).strftime("%d-%b-%Y")
+        since = (datetime.utcnow() - timedelta(hours=1)).strftime("%d-%b-%Y")
         typ, data = M.search(None, f'(SINCE "{since}")')
         ids = data[0].split()
         if not ids:
