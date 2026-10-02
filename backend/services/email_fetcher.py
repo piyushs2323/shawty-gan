@@ -39,6 +39,7 @@ CATEGORIES = {
             "verification code", "verify your", "confirm your", "your code", "verify email",
             "código de verificação", "codigo de verificacao", "verifique sua",
             "código de verificación", "codigo de verificacion", "verifica tu",
+            "este código vence", "este codigo vence", "código vence", "codigo vence",
             "code de vérification", "code de verification", "vérifiez votre",
             "bestätigungscode", "bestatigungscode", "bestätige deine",
             "codice di verifica", "verifica il tuo",
